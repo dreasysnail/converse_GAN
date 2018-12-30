@@ -426,29 +426,18 @@ def main():
     # Prepare training and testing data
 
 
-    loadpath = "../data/reddit_2m/"
+    loadpath = "./"
+
     src_file = loadpath + "Pairs2M.src.num"
     tgt_file = loadpath + "Pairs2M.tgt.num"
     dic_file = loadpath + "Pairs2M.reddit.dic"
 
-
-
     opt = Options()
     opt_t = Options()
 
-    if opt.g_rev:
-        print "Source and Target REVERSED"
-        src_file, tgt_file = tgt_file, src_file
-
-    train, val, test , wordtoix, ixtoword = read_pair_data_full(src_file, tgt_file, dic_file, max_num = opt.data_size, p_f = loadpath + 'data.p')
+    train, val, test , wordtoix, ixtoword = read_pair_data_full(src_file, tgt_file, dic_file, max_num = opt.data_size, p_f = loadpath + 'demo.p')
     train = [ x for x in train if 2<len(x[1])<opt.maxlen - 4 and 2<len(x[0])<opt_t.maxlen - 4]
     val = [ x for x in val if 2<len(x[1])<opt.maxlen - 4 and 2<len(x[0])<opt_t.maxlen - 4]
-    # test = test[:2000]
-    # test = [ x for x in test if 2<len(x[1])<opt.maxlen - 4 and 2<len(x[0])<opt_t.maxlen - 4]
-
-    test_src_file = loadpath + "test.2k.full.src.num" # "test.2k.src.num"  #"Pairs2M.src.num"
-    test_tgt_file = loadpath + "test.2k.full.tgt.num"#"test.2k.tgt.num"#"Pairs2M.tgt.num"
-    test, _, _, _, _ = read_pair_data_full(test_src_file, test_tgt_file, dic_file, max_num = None, train_prop=None)
 
     if TEST_FLAG:
         test = test + val + train
