@@ -12,6 +12,7 @@ Implementations of the models in the paper "Generating Informative and Diverse C
 ## Data: 
 * Not directly sharable due to copyright issue. 
 * Data format and screening criteria will be released soon. Stay tuned.
+* See demo.p for data format.
 
 For any question or suggestions, feel free to contact yizhe.zhang@microsoft.com
 
