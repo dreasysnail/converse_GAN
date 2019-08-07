@@ -2,12 +2,12 @@
 Implementations of the models in the paper "Generating Informative and Diverse Conversational Responses via Adversarial Information Maximization" by Yizhe Zhang, Michel Galley, Jianfeng Gao, Zhe Gan, Xiujun Li, Chris Brockett, Bill Dolan, NeurIPS 2018
 
 ## Prerequisite: 
-* Tensorflow (version >1.2)
+* Tensorflow (version >1.9)
 * CUDA, cudnn
-
+* pip install nltk gensim
 
 ## Run 
-* Run: `./run.sh` 
+* See `./run.sh` for training and testing commands
 
 ## Data: 
 * Not directly sharable due to copyright issue. 

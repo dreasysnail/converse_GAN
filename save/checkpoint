@@ -1,0 +1,2 @@
+model_checkpoint_path: "gan100_dim_cnn_rnn_pair_diff_gan_twoside_mi"
+all_model_checkpoint_paths: "gan100_dim_cnn_rnn_pair_diff_gan_twoside_mi"

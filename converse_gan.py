@@ -170,7 +170,7 @@ class Options(object):
         self.load_path = "./save/" + ("pretrained" if (not args.testflag and not args.continuing) else self.name) #"./save/" + self.name #+ 
         self.save_path = "./save/" + self.name 
         self.log_path = "./log" + self.name 
-        self.embedding_path = "../data/GoogleNews-vectors-negative300.bin"
+        self.embedding_path = "./data/GoogleNews-vectors-negative300.bin"
         self.embedding_path_lime = self.embedding_path + '.p'
         self.print_freq = 100
         self.valid_freq = 20000
@@ -372,7 +372,7 @@ def dialog_gan(src, tgt,  opt, opt_t=None):
     if opt.two_side:
         res_dict, gan_cost_d, gan_cost_g = conditional_gan(src, tgt, z,  opt, opt_t=opt_t)
         src_rev , tgt_rev = tf.concat([tf.cast(tf.zeros([opt.batch_size, (opt.filter_shape-1)]),tf.int32), tgt], 1)  , src[:,(opt.filter_shape-1):]
-        rev_res_dict, gan_cost_d_rev, gan_cost_g_rev = conditional_gan(src_rev, tgt_rev, z,  opt, opt_t=opt_t, is_reuse_generator = True)
+        rev_res_dict, gan_cost_d_rev, gan_cost_g_rev = conditional_gan(src_rev, tgt_rev, z,  opt, opt_t=opt_t, is_reuse_generator = tf.AUTO_REUSE)
         gan_cost_d += opt.lambda_backward*gan_cost_d_rev
         gan_cost_g += opt.lambda_backward*gan_cost_g_rev
     else:
@@ -426,7 +426,7 @@ def main():
     # Prepare training and testing data
 
 
-    loadpath = "./"
+    loadpath = "./data/"
 
     src_file = loadpath + "Pairs2M.src.num"
     tgt_file = loadpath + "Pairs2M.tgt.num"
@@ -440,7 +440,7 @@ def main():
     val = [ x for x in val if 2<len(x[1])<opt.maxlen - 4 and 2<len(x[0])<opt_t.maxlen - 4]
 
     if TEST_FLAG:
-        test = test + val + train
+        test = [test] 
         opt.test_freq = 1
 
     opt.n_words = len(ixtoword)
@@ -532,7 +532,43 @@ def main():
             print("Starting epoch %d" % epoch)
             kf = get_minibatches_idx(len(train), opt.batch_size, shuffle=True)
             for _, train_index in kf:
+                
                 uidx += 1
+
+                if uidx%opt.test_freq == 1:
+                    iter_num = np.int(np.floor(len(test)/opt.batch_size))+1
+                    res_all, test_tgt_all = [], []
+                    
+                    for i in range(iter_num):
+                        test_index = range(i * opt.batch_size,(i+1) * opt.batch_size)
+                        test_tgt, test_src = zip(*[test[t%len(test)] for t in test_index])
+                        test_tgt_all.extend(test_tgt)
+                        x_batch = prepare_data_for_cnn(test_src, opt)
+                        y_batch = prepare_data_for_rnn(test_tgt, opt_t, is_add_GO = False) if opt.model == 'cnn_rnn' else prepare_data_for_cnn(test_tgt, opt_t)
+                        feed = {src_: x_batch, tgt_: y_batch}
+                        res = sess.run(res_, feed_dict=feed)
+                        res_all.extend(res['syn_sent'])
+
+
+                    test_set = [prepare_for_bleu(s) for s in test_tgt_all]
+                    gen = [prepare_for_bleu(s) for s in res_all]
+                    [bleu1s,bleu2s,bleu3s,bleu4s] = cal_BLEU_4(gen, {0: test_set}, is_corpus = opt.is_corpus)
+                    [rouge1,rouge2,rouge3,rouge4,rougeL,rouges] = cal_ROUGE(gen, {0: test_set}, is_corpus = opt.is_corpus)
+                    etp_score, dist_score = cal_entropy(gen)
+                    bleu_nltk = cal_BLEU_4_nltk(gen, test_set, is_corpus = opt.is_corpus)
+                    rel_score = cal_relevance(gen, test_set, embedding)
+
+
+                    print 'Test BLEU: ' + ' '.join([str(round(it,3)) for it in (bleu_nltk,bleu1s,bleu2s,bleu3s,bleu4s)])
+                    print 'Test Rouge: ' + ' '.join([str(round(it,3)) for it in (rouge1,rouge2,rouge3,rouge4)])
+                    print 'Test Entropy: ' + ' '.join([str(round(it,3)) for it in (etp_score[0],etp_score[1],etp_score[2],etp_score[3])])
+                    print 'Test Diversity: ' + ' '.join([str(round(it,3)) for it in (dist_score[0],dist_score[1],dist_score[2],dist_score[3])])
+                    print 'Test Relevance(G,A,E): ' + ' '.join([str(round(it,3)) for it in (rel_score[0],rel_score[1],rel_score[2])])
+                    print 'Test Avg. length: ' + str(round(np.mean([len([y for y in x if y!=0]) for x in res_all]),3)) 
+                    print ''
+
+                    if TEST_FLAG:
+                        exit()
 
                 tgt, src = zip(*[train[t] for t in train_index])
                 x_batch = prepare_data_for_cnn(src, opt) # Batch L
@@ -543,13 +579,13 @@ def main():
 
                 feed = {src_: x_batch, tgt_: y_batch}
 
-                if uidx%opt.d_freq == 0:
+                if uidx%opt.d_freq == 1:
                     if profile:
                         _, loss_d = sess.run([train_op_d, gan_cost_d_],feed_dict=feed, options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),run_metadata=run_metadata)
                     else:
                         _, loss_d = sess.run([train_op_d, gan_cost_d_],feed_dict=feed)
 
-                if uidx%opt.g_freq == 0:
+                if uidx%opt.g_freq == 1:
                     if profile:
                         _, loss_g = sess.run([train_op_g, gan_cost_g_],feed_dict=feed, options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),run_metadata=run_metadata)
                     else:
@@ -564,7 +600,7 @@ def main():
 
 
 
-                if uidx%opt.valid_freq == 0:
+                if uidx%opt.valid_freq == 1:
                     VALID_SIZE = 1024
                     valid_multiplier = np.int(np.floor(VALID_SIZE/opt.batch_size))
                     res_all, val_tgt_all, loss_val_d_all, loss_val_g_all = [], [], [], []
@@ -612,43 +648,10 @@ def main():
                     test_writer.add_summary(summary, uidx)
                     test_writer.add_summary(summary2, uidx)
 
-                if uidx%opt.test_freq == 0:
-                    iter_num = np.int(np.floor(len(test)/opt.batch_size))+1
-                    res_all, test_tgt_all = [], []
-                    
-                    for i in range(iter_num):
-                        test_index = range(i * opt.batch_size,(i+1) * opt.batch_size)
-                        test_tgt, test_src = zip(*[test[t%len(test)] for t in test_index])
-                        test_tgt_all.extend(test_tgt)
-                        x_batch = prepare_data_for_cnn(test_src, opt)
-                        y_batch = prepare_data_for_rnn(test_tgt, opt_t, is_add_GO = False) if opt.model == 'cnn_rnn' else prepare_data_for_cnn(test_tgt, opt_t)
-                        feed = {src_: x_batch, tgt_: y_batch}
-                        res = sess.run(res_, feed_dict=feed)
-                        res_all.extend(res['syn_sent'])
+                
 
 
-                    test_set = [prepare_for_bleu(s) for s in test_tgt_all]
-                    gen = [prepare_for_bleu(s) for s in res_all]
-                    [bleu1s,bleu2s,bleu3s,bleu4s] = cal_BLEU_4(gen, {0: test_set}, is_corpus = opt.is_corpus)
-                    [rouge1,rouge2,rouge3,rouge4,rougeL,rouges] = cal_ROUGE(gen, {0: test_set}, is_corpus = opt.is_corpus)
-                    etp_score, dist_score = cal_entropy(gen)
-                    bleu_nltk = cal_BLEU_4_nltk(gen, test_set, is_corpus = opt.is_corpus)
-                    rel_score = cal_relevance(gen, test_set, embedding)
-
-
-                    print 'Test BLEU: ' + ' '.join([str(round(it,3)) for it in (bleu_nltk,bleu1s,bleu2s,bleu3s,bleu4s)])
-                    print 'Test Rouge: ' + ' '.join([str(round(it,3)) for it in (rouge1,rouge2,rouge3,rouge4)])
-                    print 'Test Entropy: ' + ' '.join([str(round(it,3)) for it in (etp_score[0],etp_score[1],etp_score[2],etp_score[3])])
-                    print 'Test Diversity: ' + ' '.join([str(round(it,3)) for it in (dist_score[0],dist_score[1],dist_score[2],dist_score[3])])
-                    print 'Test Relevance(G,A,E): ' + ' '.join([str(round(it,3)) for it in (rel_score[0],rel_score[1],rel_score[2])])
-                    print 'Test Avg. length: ' + str(round(np.mean([len([y for y in x if y!=0]) for x in res_all]),3)) 
-                    print ''
-
-                    if TEST_FLAG:
-                        exit()
-
-
-                if uidx%opt.print_freq == 0:
+                if uidx%opt.print_freq == 1:
                     print("Iteration %d: loss D %f loss G %f" %(uidx, loss_d, loss_g))
 
                     res = sess.run(res_, feed_dict=feed)
@@ -664,7 +667,7 @@ def main():
                     summary = sess.run(merged, feed_dict=feed)
                     train_writer.add_summary(summary, uidx)
 
-                if uidx%opt.save_freq == 0:
+                if uidx%opt.save_freq == 1:
                     saver.save(sess, opt.save_path)
 
 
